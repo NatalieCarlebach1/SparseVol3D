@@ -1,0 +1,28 @@
+name: sparsevol3d
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.11
+  - pip
+
+  # PyTorch — installs CUDA 12.1 build; falls back gracefully to CPU if no GPU
+  - pytorch>=2.2.0
+  - torchvision>=0.17.0
+  - pytorch-cuda=12.1        # remove this line if you have no NVIDIA GPU
+
+  # Scientific stack
+  - numpy>=1.24
+  - scipy>=1.10
+  - scikit-image>=0.21
+  - matplotlib>=3.7
+
+  # Medical imaging
+  - pip:
+    - nibabel>=4.0.0
+
+  # Utilities
+  - tqdm>=4.65

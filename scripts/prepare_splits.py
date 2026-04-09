@@ -61,7 +61,7 @@ def main():
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     with open(args.output, "w") as f:
         json.dump(splits, f, indent=2)
-    print(f"Splits saved → {args.output}")
+    print(f"Splits saved to {args.output}")
 
 
 if __name__ == "__main__":

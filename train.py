@@ -21,7 +21,7 @@ import random
 import numpy as np
 import torch
 import torch.optim as optim
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -73,7 +73,7 @@ def train_one_epoch(model, loader, optimizer, scaler, device, lambda_vic):
 
         optimizer.zero_grad(set_to_none=True)
 
-        with autocast(enabled=scaler is not None):
+        with autocast("cuda", enabled=scaler is not None):
             logits = model(img)
             loss   = combined_loss(logits, seg, mask, lambda_vic=lambda_vic)
 
@@ -129,21 +129,47 @@ def main():
     parser.add_argument("--seed",         type=int,   default=None)
     parser.add_argument("--no_amp",       action="store_true",
                         help="Disable mixed precision")
+    parser.add_argument("--debug",        action="store_true",
+                        help="CPU debug mode: tiny model + 2 cases + 3 epochs")
     args = parser.parse_args()
 
     cfg = build_config_from_args(args)
     if args.no_amp:
         cfg.amp = False
 
+    # ── Auto-detect device ────────────────────────────────────────────────────
+    cuda_available = torch.cuda.is_available()
+    device = torch.device("cuda" if cuda_available else "cpu")
+
+    if not cuda_available:
+        print("WARNING: CUDA not available — running on CPU.")
+        print("         For full training use a CUDA-enabled GPU.")
+        print("         Switching to CPU debug mode (small patch/model).\n")
+        args.debug = True
+
+    # ── CPU debug mode overrides ──────────────────────────────────────────────
+    if args.debug:
+        cfg.patch_size    = (16, 64, 64)
+        cfg.base_channels = 8
+        cfg.batch_size    = 1
+        cfg.epochs        = 3
+        cfg.num_workers   = 0           # no multiprocessing on CPU
+        cfg.amp           = False       # AMP requires CUDA
+        cfg.log_interval  = 1
+        cfg.save_interval = 3
+        # Use only first 2 train cases and 1 val case for speed
+        cfg.train_cases   = cfg.train_cases[:2]
+        cfg.val_cases     = cfg.val_cases[:1]
+        print("DEBUG MODE: patch=(16,64,64), base_channels=8, epochs=3, 2 train cases\n")
+
     set_seed(cfg.seed)
     os.makedirs(cfg.output_dir, exist_ok=True)
 
-    device = torch.device(cfg.device if torch.cuda.is_available() else "cpu")
     print(f"Device       : {device}")
     print(f"Label stride : {cfg.label_stride}  "
           f"({100 / cfg.label_stride:.0f}% annotation budget)")
     print(f"VIC lambda   : {cfg.lambda_vic}")
-    print(f"AMP          : {cfg.amp}")
+    print(f"AMP          : {cfg.amp and cuda_available}")
     print()
 
     # ── Datasets ──────────────────────────────────────────────────────────────
@@ -160,17 +186,17 @@ def main():
         mode="val",
     )
 
+    pin = cuda_available
     train_loader = DataLoader(
         train_ds, batch_size=cfg.batch_size,
-        shuffle=True, num_workers=cfg.num_workers, pin_memory=True,
+        shuffle=True, num_workers=cfg.num_workers, pin_memory=pin,
     )
     val_loader = DataLoader(
         val_ds, batch_size=cfg.batch_size,
-        shuffle=False, num_workers=cfg.num_workers, pin_memory=True,
+        shuffle=False, num_workers=cfg.num_workers, pin_memory=pin,
     )
 
-    print(f"Train cases  : {len(cfg.train_cases)}  "
-          f"→  {len(train_ds)} patch samples")
+    print(f"Train cases  : {len(cfg.train_cases)}  ({len(train_ds)} patch samples)")
     print(f"Val cases    : {len(cfg.val_cases)}")
     print()
 
@@ -188,7 +214,7 @@ def main():
         model.parameters(), lr=cfg.lr, weight_decay=cfg.weight_decay
     )
     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
-    scaler    = GradScaler() if cfg.amp and device.type == "cuda" else None
+    scaler    = GradScaler("cuda") if cfg.amp and cuda_available else None
 
     # ── Save config ───────────────────────────────────────────────────────────
     with open(os.path.join(cfg.output_dir, "config.json"), "w") as f:
@@ -258,7 +284,7 @@ def main():
         json.dump(log_rows, f, indent=2)
 
     print(f"\nDone. Best mean Dice: {best_dice:.4f}")
-    print(f"Best checkpoint → {cfg.output_dir}/best_model.pt")
+    print(f"Best checkpoint saved to {cfg.output_dir}/best_model.pt")
 
 
 if __name__ == "__main__":

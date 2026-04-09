@@ -77,15 +77,39 @@ SparseVol3D/
 
 ## Setup
 
-### 1. Install dependencies
+### Option A — Conda (recommended)
+
+```bash
+conda env create -f environment.yml
+conda activate sparsevol3d
+```
+
+Installs PyTorch with CUDA 12.1. If you have **no NVIDIA GPU**, remove the
+`pytorch-cuda=12.1` line from `environment.yml` first.
+
+### Option B — pip
 
 ```bash
 pip install -r requirements.txt
 ```
 
-Requires Python 3.9+ and PyTorch 2.0+ with CUDA.
+Requires Python 3.9+ and PyTorch 2.0+.
 
-### 2. Download KiTS19 data
+### Verify
+
+```bash
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+
+### 2. Get data
+
+#### Option A — Synthetic data (quick test, no download needed)
+```bash
+python scripts/make_synthetic_data.py --n_cases 10 --data_dir data/kits19/data
+```
+Generates 10 fake NIfTI volumes in seconds. Good for verifying the pipeline.
+
+#### Option B — Real KiTS19 data (~50 GB)
 
 ```bash
 git clone https://github.com/neheller/kits19
@@ -117,7 +141,16 @@ python scripts/prepare_splits.py --data_dir data/kits19/data
 
 ## Training
 
-All experiments use the same 3D U-Net. Only `--label_stride` and `--lambda_vic` vary.
+### CPU smoke test (no GPU needed)
+```bash
+python train.py --data_dir data/kits19/data --output_dir outputs/debug --debug
+```
+`--debug` uses a tiny model (base_channels=8, patch 16×64×64) and runs 3 epochs
+in ~2 minutes on CPU. Triggered automatically if no GPU is detected.
+
+---
+
+All GPU experiments use the same 3D U-Net. Only `--label_stride` and `--lambda_vic` vary.
 
 ### Dense supervision (oracle baseline)
 ```bash

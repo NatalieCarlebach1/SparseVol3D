@@ -37,4 +37,9 @@ class Config:
     num_workers: int = 4
     log_interval: int = 10        # validate every N epochs
     save_interval: int = 10       # checkpoint every N epochs
-    device: str = "cuda"
+    device: str = "cuda"          # overridden to "cpu" automatically if no GPU
+
+    # ── CPU debug mode ────────────────────────────────────────────────────────
+    # Activated automatically when no GPU is found, or via --debug flag.
+    # Uses tiny patch/model so a full epoch finishes in seconds on CPU.
+    debug: bool = False
