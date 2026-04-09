@@ -98,11 +98,13 @@ def main():
                         help="Write predicted .nii.gz files to output_dir")
     parser.add_argument("--stride_factor",    type=float, default=0.5,
                         help="Sliding window stride as fraction of patch size (default 0.5)")
+    parser.add_argument("--splits_file",      type=str, default="outputs/splits.json",
+                        help="Path to splits JSON (produced by scripts/prepare_splits.py)")
     args = parser.parse_args()
 
     # ── Load checkpoint ───────────────────────────────────────────────────────
     print(f"Loading checkpoint: {args.checkpoint}")
-    ckpt     = torch.load(args.checkpoint, map_location="cpu")
+    ckpt     = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     cfg_dict = ckpt["config"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -123,8 +125,14 @@ def main():
     stride     = tuple(max(1, int(p * args.stride_factor)) for p in patch_size)
     num_classes = cfg_dict.get("num_classes", 3)
 
-    cfg = Config()
-    cases = cfg.val_cases if args.split == "val" else cfg.test_cases
+    # Load splits from file if available, else fall back to Config defaults
+    if os.path.exists(args.splits_file):
+        with open(args.splits_file) as f:
+            splits = json.load(f)
+        cases = splits["val"] if args.split == "val" else splits["test"]
+    else:
+        cfg = Config()
+        cases = cfg.val_cases if args.split == "val" else cfg.test_cases
 
     if args.save_predictions:
         os.makedirs(args.output_dir, exist_ok=True)
@@ -172,9 +180,9 @@ def main():
         results.append(row)
 
     # ── Summary ───────────────────────────────────────────────────────────────
-    print(f"\n{'─'*50}")
+    print(f"\n{'-'*50}")
     print(f"Results on {args.split} split ({len(results)} cases)")
-    print(f"{'─'*50}")
+    print(f"{'-'*50}")
 
     label_names = {1: "Kidney", 2: "Tumor"}
     mean_dices  = []
@@ -203,7 +211,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     with open(out_json, "w") as f:
         json.dump(summary, f, indent=2)
-    print(f"\nDetailed results → {out_json}")
+    print(f"\nDetailed results saved to {out_json}")
 
 
 if __name__ == "__main__":
