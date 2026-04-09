@@ -6,6 +6,8 @@ with Volumetric Interpolation Consistency**
 A clean, reproducible research prototype for annotation-efficient 3D CT segmentation.
 Tested on [KiTS19](https://kits19.grand-challenge.org/) (kidney & tumor segmentation).
 
+[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NatalieCarlebach1/SparseVol3D/blob/master/colab_setup.ipynb)
+
 ---
 
 ## The Idea in One Paragraph
