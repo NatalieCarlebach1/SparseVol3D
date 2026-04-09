@@ -29,7 +29,7 @@ Inspired by 3D Gaussian Splatting's continuous field principle.
 pip install -r requirements.txt
 python scripts/prepare_splits.py --data_dir data/kits19/data
 python train.py --label_stride 5 --lambda_vic 0.1 --output_dir outputs/sparsevol3d_5
-python evaluate.py --checkpoint outputs/sparsevol3d_5/best_model.pt --split test
+python evaluate.py --checkpoint outputs/sparsevol3d_5/best_model.pt --splits_file outputs/splits.json --split test
 ```
 
 ## Preferences

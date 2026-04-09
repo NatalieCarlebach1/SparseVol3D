@@ -211,19 +211,21 @@ done
 
 ```bash
 python evaluate.py \
-  --checkpoint outputs/sparsevol3d_stride5/best_model.pt \
-  --data_dir data/kits19/data \
-  --split test
+  --checkpoint  outputs/sparsevol3d_stride5/best_model.pt \
+  --data_dir    data/kits19/data \
+  --splits_file outputs/splits.json \
+  --split       test
 ```
 
 Save predicted segmentation volumes:
 ```bash
 python evaluate.py \
-  --checkpoint outputs/sparsevol3d_stride5/best_model.pt \
-  --data_dir data/kits19/data \
-  --split test \
+  --checkpoint  outputs/sparsevol3d_stride5/best_model.pt \
+  --data_dir    data/kits19/data \
+  --splits_file outputs/splits.json \
+  --split       test \
   --save_predictions \
-  --output_dir outputs/predictions
+  --output_dir  outputs/predictions
 ```
 
 ---

@@ -120,14 +120,16 @@ done
 
 ```bash
 python evaluate.py \
-  --checkpoint outputs/sparsevol3d_5/best_model.pt \
-  --data_dir   data/kits19/data \
-  --split      test
+  --checkpoint  outputs/sparsevol3d_5/best_model.pt \
+  --data_dir    data/kits19/data \
+  --splits_file outputs/splits.json \
+  --split       test
 
 # Save prediction .nii.gz files:
 python evaluate.py \
-  --checkpoint outputs/sparsevol3d_5/best_model.pt \
-  --split test --save_predictions --output_dir outputs/predictions
+  --checkpoint  outputs/sparsevol3d_5/best_model.pt \
+  --splits_file outputs/splits.json \
+  --split       test --save_predictions --output_dir outputs/predictions
 ```
 
 ---

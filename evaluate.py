@@ -2,8 +2,8 @@
 evaluate.py — Sliding-window inference + Dice evaluation on val or test set.
 
 Usage:
-  python evaluate.py --checkpoint outputs/sparsevol3d_5/best_model.pt --split test
-  python evaluate.py --checkpoint outputs/dense/best_model.pt --split val --save_predictions
+  python evaluate.py --checkpoint outputs/sparsevol3d_5/best_model.pt --splits_file outputs/splits.json --split test
+  python evaluate.py --checkpoint outputs/dense/best_model.pt --splits_file outputs/splits.json --split val --save_predictions
 """
 
 import argparse
