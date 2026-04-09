@@ -131,11 +131,23 @@ def main():
                         help="Disable mixed precision")
     parser.add_argument("--debug",        action="store_true",
                         help="CPU debug mode: tiny model + 2 cases + 3 epochs")
+    parser.add_argument("--use_coord_mlp", action="store_true",
+                        help="Add NeRF-inspired CoordMLP to U-Net decoder")
+    parser.add_argument("--coord_features",   type=int, default=None,
+                        help="Output channels from CoordMLP (default 16)")
+    parser.add_argument("--coord_freq_bands", type=int, default=None,
+                        help="Sinusoidal frequency bands in CoordMLP (default 6)")
     args = parser.parse_args()
 
     cfg = build_config_from_args(args)
     if args.no_amp:
         cfg.amp = False
+    if args.use_coord_mlp:
+        cfg.use_coord_mlp = True
+    if args.coord_features is not None:
+        cfg.coord_features = args.coord_features
+    if args.coord_freq_bands is not None:
+        cfg.coord_freq_bands = args.coord_freq_bands
 
     # ── Auto-detect device ────────────────────────────────────────────────────
     cuda_available = torch.cuda.is_available()
@@ -205,7 +217,12 @@ def main():
         in_channels=1,
         num_classes=cfg.num_classes,
         base_channels=cfg.base_channels,
+        use_coord_mlp=cfg.use_coord_mlp,
+        coord_features=cfg.coord_features,
+        coord_freq_bands=cfg.coord_freq_bands,
     ).to(device)
+    if cfg.use_coord_mlp:
+        print(f"CoordMLP      : ON  (features={cfg.coord_features}, freq_bands={cfg.coord_freq_bands})")
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model params : {n_params / 1e6:.2f} M")
 

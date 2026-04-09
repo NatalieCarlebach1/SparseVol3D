@@ -114,6 +114,9 @@ def main():
         in_channels=1,
         num_classes=cfg_dict.get("num_classes", 3),
         base_channels=cfg_dict.get("base_channels", 32),
+        use_coord_mlp=cfg_dict.get("use_coord_mlp", False),
+        coord_features=cfg_dict.get("coord_features", 16),
+        coord_freq_bands=cfg_dict.get("coord_freq_bands", 6),
     ).to(device)
     model.load_state_dict(ckpt["model"])
     print(f"Checkpoint epoch: {ckpt.get('epoch', '?')}  "

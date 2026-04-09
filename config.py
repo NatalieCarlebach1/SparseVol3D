@@ -39,6 +39,11 @@ class Config:
     save_interval: int = 10       # checkpoint every N epochs
     device: str = "cuda"          # overridden to "cpu" automatically if no GPU
 
+    # ── NeRF-inspired CoordMLP ────────────────────────────────────────────────
+    use_coord_mlp:    bool = False  # fuse coordinate field into U-Net decoder
+    coord_features:   int  = 16    # output channels from CoordMLP
+    coord_freq_bands: int  = 6     # sinusoidal frequency bands (NeRF uses 10)
+
     # ── CPU debug mode ────────────────────────────────────────────────────────
     # Activated automatically when no GPU is found, or via --debug flag.
     # Uses tiny patch/model so a full epoch finishes in seconds on CPU.
