@@ -1,12 +1,13 @@
 """
 run_experiments.py — Run all ablation experiments in sequence.
 
-Trains one model per (label_stride, lambda_vic) combination,
+Trains one model per (label_stride, lambda_vic, use_coord_mlp) combination,
 saves checkpoints, then prints a summary results table.
 
 Usage:
   python run_experiments.py --data_dir data/kits19/data
   python run_experiments.py --data_dir data/kits19/data --epochs 50 --quick
+  python run_experiments.py --data_dir data/kits19/data --coord_mlp   # also run CoordMLP variants
 """
 
 import argparse
@@ -19,24 +20,33 @@ from datetime import datetime
 
 
 EXPERIMENTS = [
-    # (label_stride, lambda_vic, name)
-    (1,  0.0, "dense_baseline"),
-    (2,  0.0, "sparse_stride2_novic"),
-    (2,  0.1, "sparsevol3d_stride2"),
-    (5,  0.0, "sparse_stride5_novic"),
-    (5,  0.1, "sparsevol3d_stride5"),
-    (10, 0.0, "sparse_stride10_novic"),
-    (10, 0.1, "sparsevol3d_stride10"),
-    (20, 0.0, "sparse_stride20_novic"),
-    (20, 0.1, "sparsevol3d_stride20"),
+    # (label_stride, lambda_vic, use_coord_mlp, name)
+    (1,  0.0, False, "dense_baseline"),
+    (2,  0.0, False, "sparse_stride2_novic"),
+    (2,  0.1, False, "sparsevol3d_stride2"),
+    (5,  0.0, False, "sparse_stride5_novic"),
+    (5,  0.1, False, "sparsevol3d_stride5"),
+    (10, 0.0, False, "sparse_stride10_novic"),
+    (10, 0.1, False, "sparsevol3d_stride10"),
+    (20, 0.0, False, "sparse_stride20_novic"),
+    (20, 0.1, False, "sparsevol3d_stride20"),
+]
+
+# CoordMLP variants: SparseVol3D + NeRF-inspired coordinate field
+COORD_MLP_EXPERIMENTS = [
+    # (label_stride, lambda_vic, use_coord_mlp, name)
+    (1,  0.0, True, "dense_coord"),
+    (5,  0.0, True, "sparse_stride5_coord"),
+    (5,  0.1, True, "sparsevol3d_stride5_coord"),
+    (10, 0.1, True, "sparsevol3d_stride10_coord"),
 ]
 
 
-def run_experiment(name, label_stride, lambda_vic, data_dir, output_root, epochs, extra_args):
+def run_experiment(name, label_stride, lambda_vic, use_coord_mlp, data_dir, output_root, epochs, extra_args):
     output_dir = os.path.join(output_root, name)
     print(f"\n{'='*60}")
     print(f"  {name}")
-    print(f"  label_stride={label_stride}  lambda_vic={lambda_vic}")
+    print(f"  label_stride={label_stride}  lambda_vic={lambda_vic}  coord_mlp={use_coord_mlp}")
     print(f"{'='*60}")
 
     cmd = [
@@ -47,6 +57,9 @@ def run_experiment(name, label_stride, lambda_vic, data_dir, output_root, epochs
         "--lambda_vic",   str(lambda_vic),
         "--epochs",       str(epochs),
     ] + extra_args
+
+    if use_coord_mlp:
+        cmd.append("--use_coord_mlp")
 
     result = subprocess.run(cmd, capture_output=False, text=True)
     return result.returncode == 0, output_dir
@@ -81,6 +94,8 @@ def main():
                         help="CPU debug mode (tiny model, 3 epochs)")
     parser.add_argument("--strides",     type=int, nargs="+", default=None,
                         help="Only run experiments with these label strides, e.g. --strides 1 5 10")
+    parser.add_argument("--coord_mlp",   action="store_true",
+                        help="Also run CoordMLP variants (NeRF-inspired coordinate field)")
     args = parser.parse_args()
 
     extra_args = []
@@ -90,49 +105,57 @@ def main():
     if args.debug:
         extra_args += ["--debug"]
 
-    # Filter experiments if --strides specified
-    experiments = EXPERIMENTS
+    # Build experiment list
+    experiments = list(EXPERIMENTS)
+    if args.coord_mlp:
+        experiments += COORD_MLP_EXPERIMENTS
+
+    # Filter by stride if requested
     if args.strides:
-        experiments = [e for e in EXPERIMENTS if e[0] in args.strides]
+        experiments = [e for e in experiments if e[0] in args.strides]
 
     os.makedirs(args.output_root, exist_ok=True)
     start_time = datetime.now()
     print(f"Starting {len(experiments)} experiments")
     print(f"Output root: {args.output_root}")
     print(f"Epochs: {args.epochs}")
+    if args.coord_mlp:
+        print("CoordMLP variants: ON")
 
     results = []
-    for label_stride, lambda_vic, name in experiments:
+    for label_stride, lambda_vic, use_coord_mlp, name in experiments:
         success, output_dir = run_experiment(
-            name, label_stride, lambda_vic,
+            name, label_stride, lambda_vic, use_coord_mlp,
             args.data_dir, args.output_root,
             args.epochs, extra_args,
         )
         kidney, tumor, mean = read_best_dice(output_dir)
         results.append({
-            "name":         name,
-            "label_stride": label_stride,
-            "lambda_vic":   lambda_vic,
-            "annot_pct":    f"{100 // label_stride}%",
-            "kidney_dice":  f"{kidney:.4f}" if kidney is not None else "—",
-            "tumor_dice":   f"{tumor:.4f}"  if tumor  is not None else "—",
-            "mean_dice":    f"{mean:.4f}"   if mean   is not None else "—",
-            "success":      success,
+            "name":          name,
+            "label_stride":  label_stride,
+            "lambda_vic":    lambda_vic,
+            "coord_mlp":     use_coord_mlp,
+            "annot_pct":     f"{100 // label_stride}%",
+            "kidney_dice":   f"{kidney:.4f}" if kidney is not None else "-",
+            "tumor_dice":    f"{tumor:.4f}"  if tumor  is not None else "-",
+            "mean_dice":     f"{mean:.4f}"   if mean   is not None else "-",
+            "success":       success,
         })
 
     # Print results table
-    print(f"\n\n{'='*75}")
+    print(f"\n\n{'='*82}")
     print(f"  RESULTS SUMMARY")
-    print(f"{'='*75}")
-    print(f"{'Name':<30} {'Annot%':>6} {'VIC':>5} {'Kidney':>8} {'Tumor':>8} {'Mean':>8}")
-    print(f"{'-'*75}")
+    print(f"{'='*82}")
+    print(f"{'Name':<34} {'Annot%':>6} {'VIC':>5} {'CoordMLP':>9} {'Kidney':>8} {'Tumor':>8} {'Mean':>8}")
+    print(f"{'-'*82}")
     for r in results:
+        coord_str = "yes" if r["coord_mlp"] else "no"
         print(
-            f"{r['name']:<30} {r['annot_pct']:>6} "
-            f"{r['lambda_vic']:>5} {r['kidney_dice']:>8} "
-            f"{r['tumor_dice']:>8} {r['mean_dice']:>8}"
+            f"{r['name']:<34} {r['annot_pct']:>6} "
+            f"{r['lambda_vic']:>5} {coord_str:>9} "
+            f"{r['kidney_dice']:>8} {r['tumor_dice']:>8} {r['mean_dice']:>8}"
         )
-    print(f"{'='*75}")
+    print(f"{'='*82}")
 
     # Save CSV
     csv_path = os.path.join(args.output_root, "results_summary.csv")

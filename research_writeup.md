@@ -24,7 +24,8 @@ The missing ingredient in existing sparse-supervision work is an inductive bias 
 Our contributions:
 1. **Sparse axial supervision setup** cleanly formalized for 3D CT segmentation.
 2. **Volumetric Interpolation Consistency (VIC) loss**: a lightweight, differentiable regularizer that enforces depth-axis smoothness without requiring additional unlabeled volumes.
-3. A clean, reproducible PyTorch implementation on KiTS19, suitable as a workshop baseline.
+3. **NeRF-inspired CoordMLP**: a coordinate field module that fuses sinusoidal positional encodings of (x,y,z) voxel coordinates into the U-Net decoder, giving the network an explicit awareness of absolute position — analogous to how NeRF encodes scene coordinates for continuous scene representation.
+4. A clean, reproducible PyTorch implementation on KiTS19, suitable as a workshop baseline.
 
 ---
 
@@ -53,6 +54,12 @@ where K is the **label stride** (K=1 is dense; K=5 uses 20% of slices). Only y[:
 ### 3.2 Model
 
 We use a standard 3D U-Net with 4 encoder levels and symmetric decoder. The encoder uses 3D convolutions with max-pooling; the decoder uses transposed convolutions with skip connections. All convolutions are followed by BatchNorm and ReLU. The output head is a 1×1×1 convolution producing C=3 class logits.
+
+**NeRF-inspired CoordMLP (optional).** Motivated by NeRF's use of positional encoding to represent continuous 3D fields, we add an optional lightweight Coordinate MLP that encodes each voxel's normalized (x,y,z) position via sinusoidal positional encoding [Mildenhall et al., 2020]:
+
+> γ(p) = [sin(2⁰πp), cos(2⁰πp), ..., sin(2^(L−1)πp), cos(2^(L−1)πp)]
+
+The encoded coordinate grid is passed through a small 1×1×1 conv MLP (2 hidden layers, 64 channels) to produce a *spatial feature map* of shape (B, F, D, H, W), which is concatenated with the final U-Net decoder features before the segmentation head. This injects a continuous coordinate-based prior — the network can condition its predictions on absolute voxel position — without replacing the U-Net's powerful local feature extraction. The CoordMLP adds only ~8K parameters (vs. ~19M for the base U-Net) and adds zero overhead at inference time beyond a single forward pass.
 
 ### 3.3 Training Losses
 
@@ -90,15 +97,18 @@ An important property: VIC adds **zero overhead at inference** — it is only a 
 
 ### 4.2 Experimental Conditions
 
-| Condition | Label Stride K | Annotation % | VIC |
-|-----------|----------------|--------------|-----|
-| Dense (oracle) | 1 | 100% | ✗ |
-| Sparse-2 | 2 | 50% | ✗ |
-| Sparse-5 | 5 | 20% | ✗ |
-| Sparse-10 | 10 | 10% | ✗ |
-| SparseVol3D-2 | 2 | 50% | ✓ |
-| SparseVol3D-5 | 5 | 20% | ✓ |
-| SparseVol3D-10 | 10 | 10% | ✓ |
+| Condition | Label Stride K | Annotation % | VIC | CoordMLP |
+|-----------|----------------|--------------|-----|----------|
+| Dense (oracle) | 1 | 100% | ✗ | ✗ |
+| Dense + CoordMLP | 1 | 100% | ✗ | ✓ |
+| Sparse-2 | 2 | 50% | ✗ | ✗ |
+| Sparse-5 | 5 | 20% | ✗ | ✗ |
+| Sparse-10 | 10 | 10% | ✗ | ✗ |
+| SparseVol3D-2 | 2 | 50% | ✓ | ✗ |
+| SparseVol3D-5 | 5 | 20% | ✓ | ✗ |
+| SparseVol3D-10 | 10 | 10% | ✓ | ✗ |
+| SparseVol3D-5 + CoordMLP | 5 | 20% | ✓ | ✓ |
+| SparseVol3D-10 + CoordMLP | 10 | 10% | ✓ | ✓ |
 
 All models share the same 3D U-Net architecture (base_channels=32), trained for 100 epochs with AdamW and cosine LR schedule. Evaluation: volumetric Dice Score, mean of kidney and tumor.
 
@@ -109,12 +119,15 @@ Based on similar literature, we expect:
 - SparseVol3D at K=5: recover ~93% of dense Dice
 - VIC provides consistent +2–5 Dice points over plain sparse at all K values
 - The gap increases at higher sparsity (K=10, 20), where VIC has more unlabeled slices to regularize
+- CoordMLP provides a modest but consistent gain (+1–3 Dice points) by giving the network explicit position awareness; the gain is expected to be larger in sparse settings where depth-axis ambiguity is higher
 
 ### 4.4 Ablations
 
 1. **λ sensitivity**: vary λ ∈ {0.01, 0.05, 0.1, 0.5} at K=5
 2. **Interpolation order**: linear (default) vs. nearest-neighbor vs. no VIC
 3. **Architecture size**: base_channels ∈ {16, 32, 48}
+4. **CoordMLP frequency bands**: L ∈ {3, 6, 10} — trading expressivity vs. input dimensionality
+5. **VIC + CoordMLP interaction**: does CoordMLP substitute for or complement VIC?
 
 ---
 
@@ -123,12 +136,13 @@ Based on similar literature, we expect:
 **MIDL short / MICCAI workshop track:**
 
 1. **Clear problem**: annotation efficiency for 3D CT is a real, well-motivated challenge.
-2. **Novel connection**: adapting 3DGS's continuity principle to depth-axis supervision is a fresh angle not seen in the MICCAI literature.
-3. **Simple, well-executed method**: reviewers reward clean baselines over overengineered systems.
-4. **Reproducible**: public dataset, open code, fixed splits, reported variance.
-5. **Honest scope**: we do not claim SOTA; we claim a principled, efficient baseline with a specific analytical contribution (VIC loss).
+2. **Novel connection**: adapting 3DGS's continuity principle to depth-axis supervision (VIC) is a fresh angle not seen in the MICCAI literature.
+3. **NeRF-to-segmentation transfer**: using sinusoidal positional encoding inside a 3D segmentation model is an underexplored direction — borrowing from a hot computer vision trend and grounding it in a concrete benefit (absolute position awareness in sparse-supervision settings).
+4. **Simple, well-executed method**: reviewers reward clean baselines over overengineered systems.
+5. **Reproducible**: public dataset, open code, fixed splits, reported variance.
+6. **Honest scope**: we do not claim SOTA; we claim a principled, efficient baseline with two complementary analytical contributions (VIC loss + CoordMLP).
 
-The research question — *can a smooth-field prior along the depth axis recover performance from sparse axial annotations?* — is concise, testable, and interesting.
+The research question — *can smooth-field priors along the depth axis, combined with coordinate-based position encoding, recover performance from sparse axial annotations?* — is concise, testable, and interesting.
 
 ---
 
