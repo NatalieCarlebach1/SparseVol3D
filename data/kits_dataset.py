@@ -79,6 +79,9 @@ class KiTS19Dataset(Dataset):
 
         img_patch, seg_patch, d_start = self._crop(img, seg)
 
+        if self.mode == "train":
+            img_patch, seg_patch = self._augment(img_patch, seg_patch)
+
         # Sparse label mask: 1.0 for labeled axial slices, 0.0 otherwise
         D = img_patch.shape[0]
         mask = np.array(
@@ -98,6 +101,22 @@ class KiTS19Dataset(Dataset):
         img = np.clip(img, -200, 300)
         img = (img + 200.0) / 500.0          # maps [-200, 300] → [0, 1]
         return img.astype(np.float32)
+
+    def _augment(
+        self,
+        img: np.ndarray,
+        seg: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        # Random flip along each axis
+        for axis in range(3):
+            if np.random.random() > 0.5:
+                img = np.flip(img, axis=axis).copy()
+                seg = np.flip(seg, axis=axis).copy()
+        # Mild intensity jitter (scale + shift, then re-clip to [0, 1])
+        scale = np.random.uniform(0.9, 1.1)
+        shift = np.random.uniform(-0.05, 0.05)
+        img = np.clip(img * scale + shift, 0.0, 1.0).astype(np.float32)
+        return img, seg
 
     def _crop(
         self,
