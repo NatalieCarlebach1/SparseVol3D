@@ -190,6 +190,7 @@ def main():
         patch_size=cfg.patch_size,
         label_stride=cfg.label_stride,
         mode="train",
+        crops_per_case=cfg.crops_per_case,
     )
     val_ds = KiTS19Dataset(
         cfg.data_dir, cfg.val_cases,

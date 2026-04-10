@@ -32,12 +32,13 @@ class KiTS19Dataset(Dataset):
         patch_size: Tuple[int, int, int] = (64, 128, 128),
         label_stride: int = 1,
         mode: str = "train",
+        crops_per_case: int = 4,
     ):
         self.data_dir = data_dir
         self.patch_size = patch_size
         self.label_stride = label_stride
         self.mode = mode
-        self.crops_per_case = 4 if mode == "train" else 1
+        self.crops_per_case = crops_per_case if mode == "train" else 1
 
         self.cases = self._find_cases(case_ids)
         if not self.cases:
