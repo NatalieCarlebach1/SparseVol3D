@@ -127,22 +127,33 @@ def volumetric_consistency_loss(
         if labeled_idx.numel() < 2:
             continue
 
+        # Collect all unlabeled slices and their interpolation parameters
+        unlabeled_z, alphas, z0s, z1s = [], [], [], []
         for k in range(len(labeled_idx) - 1):
             z0  = labeled_idx[k].item()
             z1  = labeled_idx[k + 1].item()
             gap = z1 - z0
-
             if gap <= 1:
-                continue                       # no unlabeled slices in between
-
-            p0 = probs[b, :, z0]              # (C, H, W) — anchor at z0
-            p1 = probs[b, :, z1]              # (C, H, W) — anchor at z1
-
+                continue
             for z in range(z0 + 1, z1):
-                alpha  = (z - z0) / gap
-                target = ((1.0 - alpha) * p0 + alpha * p1).detach()
-                total  = total + F.mse_loss(probs[b, :, z], target)
-                count += 1
+                unlabeled_z.append(z)
+                alphas.append((z - z0) / gap)
+                z0s.append(z0)
+                z1s.append(z1)
+
+        if not unlabeled_z:
+            continue
+
+        # Vectorized: gather all anchor and unlabeled probs in one index op
+        alpha_t = probs.new_tensor(alphas).view(-1, 1, 1, 1)     # (N, 1, 1, 1)
+        p0 = probs[b, :, z0s].permute(1, 0, 2, 3)               # (N, C, H, W)
+        p1 = probs[b, :, z1s].permute(1, 0, 2, 3)               # (N, C, H, W)
+        pu = probs[b, :, unlabeled_z].permute(1, 0, 2, 3)        # (N, C, H, W)
+
+        targets = ((1.0 - alpha_t) * p0 + alpha_t * p1).detach()
+        # sum of per-slice mean MSE, equivalent to the previous per-z loop
+        total  = total + F.mse_loss(pu, targets, reduction="sum") / (C * H * W)
+        count += len(unlabeled_z)
 
     return total / max(count, 1)
 
