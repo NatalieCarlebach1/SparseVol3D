@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
 
@@ -118,6 +120,10 @@ class UNet3D(nn.Module):
         else:
             head_in = c
 
+        # Cache for coord grid (reused across forward passes with same spatial shape)
+        self._coord_cache_shape: Optional[tuple] = None
+        self._coord_cache_grid:  Optional[torch.Tensor] = None
+
         # Segmentation head
         self.head = nn.Conv3d(head_in, num_classes, kernel_size=1)
 
@@ -145,8 +151,11 @@ class UNet3D(nn.Module):
 
         # Fuse CoordMLP spatial features (NeRF-inspired continuous field)
         if self.use_coord_mlp:
-            coords = make_coord_grid(d1.shape[2:], device=x.device)
-            coords = coords.expand(x.shape[0], -1, -1, -1, -1)  # (B, 3, D, H, W)
+            shape = tuple(d1.shape[2:])
+            if shape != self._coord_cache_shape or self._coord_cache_grid.device != x.device:
+                self._coord_cache_grid  = make_coord_grid(shape, device=x.device)
+                self._coord_cache_shape = shape
+            coords = self._coord_cache_grid.expand(x.shape[0], -1, -1, -1, -1)
             d1 = torch.cat([d1, self.coord_mlp(coords)], dim=1)
 
         return self.head(d1)
